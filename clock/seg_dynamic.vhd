@@ -10,6 +10,10 @@ entity seg_dynamic is
         point     : in  std_logic_vector(5 downto 0); -- 小数点控制（用于时钟分隔符）
         seg_en    : in  std_logic; -- 显示使能（1=显示）
         sign      : in  std_logic; -- 符号位（暂用）
+        -- 添加外部时钟数据输入
+        hour_in   : in  unsigned(4 downto 0); -- 小时输入 (0-23)
+        minute_in : in  unsigned(5 downto 0); -- 分钟输入 (0-59)
+        second_in : in  unsigned(5 downto 0); -- 秒输入 (0-59)
         sel       : out std_logic_vector(5 downto 0); -- 位选输出（6个数码管，共阴高电平选中）
         seg       : out std_logic_vector(7 downto 0) -- 段选输出（a~dp，共阴高电平点亮）
     );
@@ -41,10 +45,10 @@ architecture Behavioral of seg_dynamic is
     signal data_disp     : std_logic_vector(3 downto 0); -- 当前显示的数字
     signal dot_disp      : std_logic; -- 当前显示的小数点
     
-    -- 时钟数据信号（模拟从data_gen模块获取的时钟数据）
-    signal hour          : unsigned(4 downto 0) := "00000"; -- 小时 (0-23)
-    signal minute        : unsigned(5 downto 0) := "000000"; -- 分钟 (0-59)
-    signal second        : unsigned(5 downto 0) := "000000"; -- 秒 (0-59)
+    -- 时钟数据信号（接收外部输入的时钟数据）
+    signal hour          : unsigned(4 downto 0); -- 小时 (0-23)
+    signal minute        : unsigned(5 downto 0); -- 分钟 (0-59)
+    signal second        : unsigned(5 downto 0); -- 秒 (0-59)
     
     -- 时钟各位数字
     signal hour_tens     : unsigned(3 downto 0); -- 时十位 (0-2)
@@ -53,47 +57,22 @@ architecture Behavioral of seg_dynamic is
     signal minute_ones   : unsigned(3 downto 0); -- 分个位 (0-9)
     signal second_tens   : unsigned(3 downto 0); -- 秒十位 (0-5)
     signal second_ones   : unsigned(3 downto 0); -- 秒个位 (0-9)
-    
-    -- 测试用计数器，用于在没有实际时钟输入时模拟计时
-    signal test_cnt      : unsigned(25 downto 0);
 
 begin
     -- =============================================================================
-    -- 测试用：模拟时钟计数（实际项目中应从外部模块获取）
+    -- 从外部模块获取时钟数据
     -- =============================================================================
     process(sys_clk, sys_rst_n)
     begin
         if sys_rst_n = '0' then
-            test_cnt <= (others => '0');
-            second <= (others => '0');
-            minute <= (others => '0');
             hour <= (others => '0');
+            minute <= (others => '0');
+            second <= (others => '0');
         elsif rising_edge(sys_clk) then
-            -- 模拟1秒计数（实际项目中应使用外部时钟输入）
-            if test_cnt >= 49999999 then -- 50MHz时钟下1秒
-                test_cnt <= (others => '0');
-                
-                -- 秒计数
-                if second = 59 then
-                    second <= (others => '0');
-                    -- 分计数
-                    if minute = 59 then
-                        minute <= (others => '0');
-                        -- 时计数
-                        if hour = 23 then
-                            hour <= (others => '0');
-                        else
-                            hour <= hour + 1;
-                        end if;
-                    else
-                        minute <= minute + 1;
-                    end if;
-                else
-                    second <= second + 1;
-                end if;
-            else
-                test_cnt <= test_cnt + 1;
-            end if;
+            -- 直接使用外部输入的时钟数据
+            hour <= hour_in;
+            minute <= minute_in;
+            second <= second_in;
         end if;
     end process;
 

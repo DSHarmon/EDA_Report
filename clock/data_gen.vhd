@@ -14,6 +14,13 @@ entity data_gen is
     port (
         sys_clk    : in  std_logic;                     -- 系统时钟，50MHz
         sys_rst_n  : in  std_logic;                     -- 复位信号，低电平有效
+        pause_flag : in  std_logic;                     -- 暂停标志（1=暂停，0=运行）
+        hour_in    : in  unsigned(4 downto 0);          -- 调整后的小时值输入
+        minute_in  : in  unsigned(5 downto 0);          -- 调整后的分钟值输入
+        second_in  : in  unsigned(5 downto 0);          -- 调整后的秒值输入
+        hour_out   : out unsigned(4 downto 0);          -- 当前小时值输出
+        minute_out : out unsigned(5 downto 0);          -- 当前分钟值输出
+        second_out : out unsigned(5 downto 0);          -- 当前秒值输出
         data       : buffer unsigned(6 downto 0);       -- 数码管显示值（暂时保留，后续将被忽略）
         point      : out std_logic_vector(5 downto 0);  -- 小数点显示（用于时钟分隔符）
         seg_en     : out std_logic;                     -- 数码管使能（高电平有效）
@@ -31,6 +38,11 @@ architecture Behavioral of data_gen is
     signal hour      : unsigned(4 downto 0);   -- 小时（0-23，5位足够）
     signal minute    : unsigned(5 downto 0);   -- 分钟（0-59，6位足够）
     signal second    : unsigned(5 downto 0);   -- 秒（0-59，6位足够）
+    
+    -- 中间寄存器，用于稳定更新，避免竞争条件
+    signal hour_sync   : unsigned(4 downto 0);   -- 小时同步寄存器
+    signal minute_sync : unsigned(5 downto 0);   -- 分钟同步寄存器
+    signal second_sync : unsigned(5 downto 0);   -- 秒同步寄存器
     
     -- 扩展：时钟数据输出（用于连接到seg_dynamic模块）
     signal clock_data : std_logic_vector(15 downto 0);  -- 23:59:59格式，每两位一组
@@ -74,33 +86,71 @@ begin
         end if;
     end process;
 
-    -- 4. 时钟计数逻辑（时:分:秒）
+    -- 4. 时钟计数逻辑（时:分:秒） - 使用更稳定的更新机制
     process(sys_clk, sys_rst_n)
+        -- 添加信号变化检测，避免不必要的更新
+        variable hour_changed   : boolean := false;
+        variable minute_changed : boolean := false;
+        variable second_changed : boolean := false;
     begin
         if sys_rst_n = '0' then
             -- 复位时清零
-            hour   <= (others => '0');
-            minute <= (others => '0');
-            second <= (others => '0');
+            hour      <= (others => '0');
+            minute    <= (others => '0');
+            second    <= (others => '0');
+            hour_sync   <= (others => '0');
+            minute_sync <= (others => '0');
+            second_sync <= (others => '0');
         elsif rising_edge(sys_clk) then
-            if flag_1sec = '1' then  -- 每1秒触发一次计数更新
-                -- 秒计数
-                if second = to_unsigned(SEC_MAX, second'length) then
-                    second <= (others => '0');  -- 秒计数到60，复位为0
-                    -- 分计数
-                    if minute = to_unsigned(MIN_MAX, minute'length) then
-                        minute <= (others => '0');  -- 分计数到60，复位为0
-                        -- 时计数
-                        if hour = to_unsigned(HOUR_MAX, hour'length) then
-                            hour <= (others => '0');  -- 时计数到24，复位为0
+            -- 重置变化标志
+            hour_changed   := false;
+            minute_changed := false;
+            second_changed := false;
+            
+            -- 第一阶段：同步输入值，避免亚稳态
+            hour_sync   <= hour_in;
+            minute_sync <= minute_in;
+            second_sync <= second_in;
+            
+            -- 第二阶段：根据状态处理
+            if pause_flag = '1' then
+                -- 暂停状态：只有当输入值真正改变时才更新，避免震荡
+                if hour_sync /= hour then
+                    hour <= hour_sync;
+                    hour_changed := true;
+                end if;
+                
+                -- 只有在前一个值没有变化时才处理下一个值，确保更新的顺序性
+                if (not hour_changed) and (minute_sync /= minute) then
+                    minute <= minute_sync;
+                    minute_changed := true;
+                end if;
+                
+                -- 只有在前两个值没有变化时才处理秒值
+                if (not hour_changed) and (not minute_changed) and (second_sync /= second) then
+                    second <= second_sync;
+                end if;
+            else
+                -- 运行状态下，正常计时
+                if flag_1sec = '1' then  -- 每1秒触发一次计数更新
+                    -- 秒计数
+                    if second = to_unsigned(SEC_MAX, second'length) then
+                        second <= (others => '0');  -- 秒计数到60，复位为0
+                        -- 分计数
+                        if minute = to_unsigned(MIN_MAX, minute'length) then
+                            minute <= (others => '0');  -- 分计数到60，复位为0
+                            -- 时计数
+                            if hour = to_unsigned(HOUR_MAX, hour'length) then
+                                hour <= (others => '0');  -- 时计数到24，复位为0
+                            else
+                                hour <= hour + 1;  -- 时递增
+                            end if;
                         else
-                            hour <= hour + 1;  -- 时递增
+                            minute <= minute + 1;  -- 分递增
                         end if;
                     else
-                        minute <= minute + 1;  -- 分递增
+                        second <= second + 1;  -- 秒递增
                     end if;
-                else
-                    second <= second + 1;  -- 秒递增
                 end if;
             end if;
         end if;
@@ -119,7 +169,9 @@ begin
         end if;
     end process;
     
-    -- 为了保持兼容性，声明一个外部接口用于获取时钟数据
-    -- 注意：在实际使用中，需要修改counter60和seg_dynamic模块来使用这个数据
+    -- 输出时钟数据给控制模块
+    hour_out   <= hour;
+    minute_out <= minute;
+    second_out <= second;
 
 end architecture Behavioral;

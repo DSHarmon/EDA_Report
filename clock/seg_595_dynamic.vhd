@@ -12,6 +12,10 @@ entity seg_595_dynamic is
         point     : in  std_logic_vector(5 downto 0);  -- 小数点显示,高电平有效
         seg_en    : in  std_logic;                     -- 数码管使能信号，高电平有效
         sign      : in  std_logic;                     -- 符号位，高电平显示负号
+        -- 添加时钟数据输入端口
+        hour_in   : in  unsigned(4 downto 0); -- 小时输入 (0-23)
+        minute_in : in  unsigned(5 downto 0); -- 分钟输入 (0-59)
+        second_in : in  unsigned(5 downto 0); -- 秒输入 (0-59)
         
         stcp      : out std_logic;                     -- 输出数据存储寄时钟
         shcp      : out std_logic;                     -- 移位寄存器的时钟输入
@@ -32,6 +36,9 @@ architecture Behavioral of seg_595_dynamic is
 			  point     : in  std_logic_vector(5 downto 0);
 			  seg_en    : in  std_logic;
 			  sign      : in  std_logic;
+			  hour_in   : in  unsigned(4 downto 0); -- 小时输入 (0-23)
+			  minute_in : in  unsigned(5 downto 0); -- 分钟输入 (0-59)
+			  second_in : in  unsigned(5 downto 0); -- 秒输入 (0-59)
 			  sel       : out std_logic_vector(5 downto 0);
 			  seg       : out std_logic_vector(7 downto 0)
 		 );
@@ -68,6 +75,9 @@ begin
 			  point     => point,
 			  seg_en    => seg_en,
 			  sign      => sign,
+			  hour_in   => hour_in,
+			  minute_in => minute_in,
+			  second_in => second_in,
 			  sel       => sel,
 			  seg       => seg
 		 );
