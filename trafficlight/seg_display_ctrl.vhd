@@ -57,10 +57,10 @@ architecture Behavioral of seg_display_ctrl is
     
 begin
     -- 1. 分解倒计时数据为十位和个位
-    main_tens_sig   <= resize(main_countdown / 10, 4);
-    main_ones_sig   <= resize(main_countdown mod 10, 4);
-    branch_tens_sig <= resize(branch_countdown / 10, 4);
-    branch_ones_sig <= resize(branch_countdown mod 10, 4);
+    branch_tens_sig   <= resize(main_countdown / 10, 4);
+    branch_ones_sig   <= resize(main_countdown mod 10, 4);
+    main_tens_sig <= resize(branch_countdown / 10, 4);
+    main_ones_sig <= resize(branch_countdown mod 10, 4);
     
     -- 2. 数码管动态扫描
     process(sys_clk, sys_rst_n)
